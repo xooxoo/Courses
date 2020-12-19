@@ -1,0 +1,15 @@
+my_theme <- theme(legend.title = element_blank(),
+                  legend.position = 'top', 
+                  legend.text = element_text(color = 'white', family = 'ubuntu', size = 12),
+                  plot.background = element_rect(color = 'black',
+                                                 fill = 'black'),
+                  legend.background = element_rect(color = 'black',
+                                                   fill = 'black'),
+                  axis.text = element_text(color = 'white'),
+                  panel.background = element_rect(fill = 'black', color = 'black'),
+                  panel.grid.major.y = element_line(color = 'gray30',
+                                                    linetype = 'longdash'),
+                  axis.text.x = element_text(face = 'bold', family = 'ubuntu', size = 14),
+                  axis.text.y = element_text(face = 'bold', family = 'ubuntu', size = 12),
+                  plot.title = element_text(face = 'bold', family = 'ubuntu', size = 14, color = 'white', hjust = 0.5)
+)

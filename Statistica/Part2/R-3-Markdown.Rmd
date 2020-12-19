@@ -1,0 +1,114 @@
+---
+title: "Canada glaciers trend analisys"
+author: "Stanislav"
+output: 
+  html_document:
+    toc: yes
+    toc_float: yes
+  pdf_document:
+    toc: yes
+    keep_tex: yes
+bibliography: bibl.bib
+urlcolor: blue
+params:
+  filename: glacier_data.csv
+linkcolor: magenta
+geometry: margin=0.8in
+header-includes:
+   - \usepackage[T2A]{fontenc}
+   - \usepackage[utf8]{inputenc}
+   - \usepackage[russian]{babel}
+   - \usepackage{caption}
+   - \usepackage{subcaption}
+---
+
+```{r setup, include=FALSE}
+library(tidyr)
+library(ggplot2)
+library(ggvis)
+library(dplyr)
+options(scipen = 0, digits = 3)
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE)
+
+```
+
+## Inroduction
+```{r, include=FALSE}
+
+setwd("~/RProjects/R_courses/Statistica/Part2")
+glacier <- read.csv(params$filename, na.strings = "..")
+```
+The data used in study is taken from:
+<https://open.canada.ca>[^1]. The algorithm is taken from @AntonovErmakov_RandomCubaturesQMC.
+
+[^1]: [Goverment of Canada site](https://open.canada.ca/data/en/dataset/aca5e1de-c234-5372-b714-ae20300fb6ce)
+
+
+This data set contains `r nrow(glacier)` measurments of `r nlevels(glacier$GEO)` Canadian glaciers mass balance, collected from `r min(glacier$REF_DATE)` till `r max(glacier$REF_DATE)`. Namely, the file includes these glaciers:
+```{r}
+levels(glacier$GEO)
+```
+
+## Hypothesis
+
+We are interested in finding out whether there is a statistically significant change in mass balance over the observed time period.
+purposes we use **R** (version `r getRversion()`) and an appropriate statistical test called _t-test_: $$t = \frac{\overline{x} - \mu_0}{s/\sqrt{n]}}.$$
+
+The workflow is as follows:
+
+1. >Read file
+2. [text](Run t-test for each glacier and collect p-values)
+3. *Support the evidence with*
+ + **a table of results;**
+ + a plot the could help demonstrate the effect.
+ 
+```{r, cache=TRUE}
+
+glacier <- glacier %>% 
+  select(REF_DATE, GEO, VALUE, Type.of.measure) %>% 
+  filter(Type.of.measure == 'Annual mass balance') %>% 
+  separate(GEO, c('Name', 'Location'), sep = ' - ')
+
+# descriptive analisys
+g1 <- glacier %>% 
+  group_by(Name) %>% 
+  summarise(YearsObserved = n(),
+            MeanChange = mean(VALUE, na.rm = T),
+            WorstChange = min(VALUE, na.rm = T),
+            WorstYear = REF_DATE[which.min(VALUE)])
+
+
+#t-test
+
+g2 <- glacier %>% 
+  group_by(Name) %>% 
+  do({
+    tt <- t.test(.$VALUE, alternative = 'less', mu = 0, conf.level = 0.99)
+    tibble(Pvalue = tt$p.value,
+               ConfidentLimit = tt$conf.int[2])
+  })
+left_join(g1, g2, by = 'Name') %>% 
+  knitr::kable(caption = 'descriptive statistics', digits = c(0,0,2,0,0,10,2))
+
+```
+ 
+```{r}
+#ggplot
+
+# ggplot(glacier, aes(REF_DATE, VALUE))+
+#   geom_line()+
+#   geom_hline(data = g1, aes(yintercept = MeanChange), color = 'coral',
+#              lty = 'dashed', alpha = 0.8)+
+#   facet_wrap(~Name)
+ggvis(glacier, ~REF_DATE, ~VALUE, stroke = ~Name) %>% 
+  layer_lines()
+
+```
+
+## Analisys
+<u> првиет </u>
+
+## Bibliography
+
+ 
+ 

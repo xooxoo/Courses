@@ -1,0 +1,130 @@
+---
+title: "Как же измененяется уровень самоубийств в РФ?"
+author: 'Stanislav'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(ggplot2)
+library(dplyr)
+library(plyr)
+library(knitr)
+knitr::opts_chunk$set(echo = FALSE )
+setwd("~/RProjects/R_courses/Statistica/Part2")
+suicide_rate <-read.csv('final_project/suicide_rate.csv')
+```
+
+## Введение
+
+С конца 2018 г. многие отмечают рост депрессивных и суицидальных настроений в обществе, что отражается в массовой культуре (мемчики), так и в повседневном общении с коллегами и друзьями. И тогда меня посетила мысль узнать, кто же чаще всего убивается в России, и, действительно ли, в последние годы стало больше самоубийств? Что и является целью этого мини-исследования.
+
+## Описание данных
+Данные взяты из открытого источника: <https://www.kaggle.com>[^1]. В них отображено количество самоубийств в различных странах с `r min(as.numeric(levels(as.factor(suicide_rate$year))))` по `r max(as.numeric(levels(as.factor(suicide_rate$year))))` гг., также наблюдения разделены по возрастным группам и полу. Так же данные содержат такие переменные как: "ВВП", "Название поколения", "Популяция" и "Индекс человеческого развития". Для исследования я отобрал наблюдения, касающиеся РФ, и сделал небольшую сводную таблицу, где указаны: среднее, максимальное и минимальное количество самоубийств в различных возрастных категориях среди мужчин и женщин,а также годы, когда наблюдалось максимальное и минимальное количество самоубийств.
+
+```{r}
+rus <- suicide_rate %>% 
+  select(-country.year, -HDI.for.year, -generation, -gdp_for_year....) %>% 
+  filter(country == 'Russian Federation', age != '5-14 years')
+rus$sex <- revalue(x = rus$sex, c('female' = 'женщины', 'male' = 'мужчины'))
+
+g1 <- rus %>% 
+  group_by(sex, age) %>% 
+  dplyr::summarise(m.suicides.no = mean(suicides.100k.pop), 
+                   max.suicides.no = max(suicides.100k.pop), 
+                   min.suicides.no = min(suicides.100k.pop),
+                   year.with.max.suicides = year[which.max(suicides.100k.pop)],
+                   year.with.min.suicides = year[which.min(suicides.100k.pop)])
+
+
+kable(g1, caption = 'Таблица 1. Число самоубийств на 100 тыс. человек по группам', digits = c(0,0,1,1,1,0,0))
+```
+
+## Анализ и графики
+
+Как видно из таблицы 1 наблюдается существенная разница между количеством самоубийств между мужчинами и женщинами во всех возрастных группах. Также заметно, что минимальное количество самоубийств приходится на последние годы во всех группах. Для наглядности, а также, чтобы проследить динамику развития "убивания себя" построим график и сразу разделим мужчин и женщин:
+```{r}
+man_woman <- rus %>% 
+  ggplot()+
+  geom_point(aes(year, suicides.100k.pop, col = age))+
+  geom_line(aes(year, suicides.100k.pop, col = age, group = age))+
+  facet_grid(~sex)+
+  ylab('Кол-во самоубийств на 100 тыс. человек')+
+  xlab('Годы')+
+  scale_color_brewer(labels = c('15 - 24 лет',
+                                '25 - 34 лет',
+                                '35 - 54 лет',
+                                '55 - 74 лет',
+                                '75+ лет') , type = 'qual',palette = 6)+
+  theme(legend.position = 'top', 
+        legend.title = element_blank(),
+        legend.direction = 'horizontal', 
+        panel.background = element_rect(fill = 'white'),
+        panel.grid.major.y = element_line(color = 'gray80'),
+        panel.grid.major.x = element_line(color = 'gray80'),
+        panel.grid.minor = element_line(color = 'gray80', linetype = 'dashed'),
+        panel.border = element_rect(fill = NA, colour = 'black'),
+        strip.background = element_rect(fill = 'white'))
+man_woman
+```
+
+Очевидно, что мужчины являются абсолютными лидерами по части самоубиств во всех возрастных категориях по сравнению с женщинами. Хотя в обоих случаях заметно уменьшение роста самоубийств, начиная с ранних 2000-х. Как видно из таблиц и графиков, моя теория об увеличении роста самоубийств была неверна. Тогда хотя бы проверим, является ли это уменьшение статистически значимым. Для этого используем t-критерий Стьюдента. 
+
+```{r}
+g2 <- rus %>% 
+  group_by(age, sex) %>% 
+  do({
+    tt <- t.test(.$suicides.100k.pop, mu = 0, conf.level = 0.99)
+    tibble(`p-value` = tt$p.value,
+           `Нижняя границ` = tt$conf.int[2])
+  })
+kable(g2, caption = 'Таблица 2. p-value одностроннего t-test\'a ', digits = c(0,0,15,1))
+```
+
+Как видно из теста, изменения внутри всех групп оказались значимы.
+Так же в датасете присутствуют значения ВВП на душу населения. Изобразим временную изменчивость ВВП и совместим с "мужскими самоубийствами"
+
+```{r}
+
+man <- rus %>%
+  filter(sex == 'мужчины')
+man_g <- man %>%
+  ggplot()+
+  geom_point(aes(year, suicides.100k.pop, col = age))+
+  geom_line(aes(year, suicides.100k.pop, col = age, group = age))+
+  ylab('Кол-во самоубийств на 100 тыс. человек')+
+  xlab('Годы')+
+  scale_color_brewer(labels = c('15 - 24 лет',
+                                '25 - 34 лет',
+                                '35 - 54 лет',
+                                '55 - 74 лет',
+                                '75+ лет') , type = 'qual',palette = 6)+
+  theme(legend.position = 'top', 
+        legend.title = element_blank(),
+        legend.direction = 'horizontal', 
+        panel.background = element_rect(fill = 'white'),
+        panel.grid.major.y = element_line(color = 'gray80'),
+        panel.grid.major.x = element_line(color = 'gray80'),
+        panel.grid.minor = element_line(color = 'gray80', linetype = 'dashed'),
+        panel.border = element_rect(fill = NA, colour = 'black'),
+        strip.background = element_rect(fill = 'white'))+
+  geom_line(aes(year, gdp_per_capita.... * 125/17100), lty = 'longdash')+
+  scale_y_continuous(sec.axis = sec_axis(~. * 17000/125, name = 'ВВП на душу населения',
+                                         breaks = seq(0, 17000, length.out = 6)),
+                     limits = c(0, 125),
+                     breaks = seq(0, 125, 25))
+
+man_g
+```
+
+Если пристально присмотреться к этому графику, то можно увидеть отрицательную корреляцию с лагом примерно три года (т.е. сначала понижается ППС, а потом следует повышением уровня самоубийств среди мужчин). Оценим коэффициент корреляции в каждой возрастной группе среди мужского населения РФ
+```{r}
+g3 <- man %>% 
+  group_by(age) %>% 
+  dplyr::summarise(R = cor.test(suicides_no, gdp_per_capita....)$estimate[[1]])
+kable(g3, caption = "Таблица 3. Коэффициенты корреции между ППС и разными возрастными группами мужского населения")
+```
+
+## Вывод
+На основе вышеприведенных графиков и таблиц можно сделать вывод, что в последние годы хоть разговоров о смерти все больше, но, к счастью, это лишь разговоры.(а можент и нет, см. дальше) Также можно сказать, что мужское население больше подвержено убиванию себя, нежели женское. Самой активной суицидальной группой среди мужчин в последние годы становятся пенсионеры 75+, а также группа 35-54 лет. Довольно высокие коэффициенты корреляции мужских суицидов с ППС говорят нам отом, что есть возможная взаимосвязь между благосостояним мужского населения и их заработком. Кстати, так как временной лаг взаимодействия составляет примерно 3 года, то вполне возможно, что как раз в 2018-2019 гг. мы сможем наблюдать повышение уровня самоубийств среди мужчин. 
+
+[^1]: [Ссылка на скачивание данных](https://www.kaggle.com/russellyates88/suicide-rates-overview-1985-to-2016)
